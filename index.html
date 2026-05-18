@@ -29,15 +29,17 @@
         .streak-lit { animation: breathe 2.4s ease-in-out infinite; }
         .checkin-burst { position: fixed; pointer-events: none; z-index: 999; width: 6px; height: 6px; border-radius: 50%; animation: burst-particle 0.8s ease-out forwards; }
         .popcard-enter { animation: popcard-in 0.25s ease-out forwards; }
-        @keyframes muyu-vibrate { 0% { transform: scale(1) rotate(0deg); } 15% { transform: scale(0.9) translate(-3px, 2px) rotate(-2deg); } 30% { transform: scale(0.9) translate(3px, -2px) rotate(2deg); } 50% { transform: scale(0.95) translate(-1px, -1px) rotate(-1deg); } 70% { transform: scale(0.95) translate(1px, 1px) rotate(1deg); } 100% { transform: scale(1) rotate(0deg); } }
+        @keyframes muyu-vibrate { 0% { transform: scale(1) rotate(0deg); } 15% { transform: scale(0.88) translate(-4px, 3px) rotate(-3deg); } 30% { transform: scale(0.88) translate(4px, -3px) rotate(3deg); } 50% { transform: scale(0.92) translate(-2px, -2px) rotate(-2deg); } 70% { transform: scale(0.92) translate(2px, 2px) rotate(2deg); } 100% { transform: scale(1) rotate(0deg); } }
         @keyframes float-up { 0% { transform: translateY(0) scale(0.8); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-70px) scale(1.1); opacity: 0; } }
         @keyframes merit-breathe { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
-        .animate-vibrate { animation: muyu-vibrate 0.25s ease-out; }
+        .animate-vibrate { animation: muyu-vibrate 0.1s ease-in-out; }
         .animate-float { animation: float-up 0.8s ease-out forwards; }
-        @keyframes stick-hit { 0% { transform: translate(0, 0) rotate(0deg); } 20% { transform: translate(-15px, 45px) rotate(-25deg); } 100% { transform: translate(0, 0) rotate(0deg); } }
-        @keyframes confetti-explode { 0% { transform: translate(0, 0) scale(1); opacity: 1; } 100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; } }
-        .animate-stick { animation: stick-hit 0.28s ease-out; }
-        .animate-confetti { animation: confetti-explode 0.8s ease-out forwards; }
+        @keyframes stick-hit { 0% { transform: translate(0, 0) rotate(0deg); } 20% { transform: translate(-15px, 40px) rotate(-25deg); } 100% { transform: translate(0, 0) rotate(0deg); } }
+        @keyframes confetti-explode-v2 { 0% { transform: translate(0, 0) scale(1); opacity: 1; } 100% { transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) scale(0); opacity: 0; } }
+        @keyframes wave-expand { 0% { transform: scale(0.1); opacity: 0.9; border-color: #FBBF24; border-width: 3px; } 100% { transform: scale(2.2); opacity: 0; border-color: rgba(251,191,36,0); border-width: 0px; } }
+        .animate-stick { animation: stick-hit 0.12s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .animate-confetti-v2 { animation: confetti-explode-v2 0.8s ease-out forwards; }
+        .animate-wave { animation: wave-expand 0.45s ease-out forwards; }
     </style>
 </head>
 <body class="relative w-screen h-screen text-white select-none">
@@ -756,11 +758,15 @@
             const stick = document.getElementById('muyu-stick');
             if (stick) {
                 stick.classList.remove('animate-stick');
-                void stick.offsetWidth;
-                stick.classList.add('animate-stick');
             }
             svg.classList.remove('animate-vibrate');
+            if (stick) {
+                void stick.offsetWidth;
+            }
             void svg.offsetWidth;
+            if (stick) {
+                stick.classList.add('animate-stick');
+            }
             svg.classList.add('animate-vibrate');
 
             const critRoll = Math.random();
@@ -778,6 +784,7 @@
 
             if (isCrit) {
                 burstConfetti();
+                burstShockwave();
             }
 
             const rect = container.getBoundingClientRect();
@@ -813,9 +820,10 @@
                 const dist = 50 + Math.random() * 70;
                 const tx = Math.cos(angle) * dist;
                 const ty = Math.sin(angle) * dist;
+                const rot = Math.random() * 360;
 
                 const particle = document.createElement('div');
-                particle.className = 'animate-confetti';
+                particle.className = 'animate-confetti-v2';
                 const size = 3 + Math.random() * 4;
                 const isCircle = Math.random() > 0.5;
                 particle.style.cssText = `
@@ -823,12 +831,30 @@
                     width:${size}px;height:${size}px;
                     ${isCircle ? 'border-radius:50%' : 'border-radius:1px'};
                     background:#FBBF24;box-shadow:0 0 5px #FBBF24;
-                    --tx:${tx}px;--ty:${ty}px;
+                    --tw-translate-x:${tx}px;--tw-translate-y:${ty}px;--tw-rotate:${rot}deg;
                     pointer-events:none;
                 `;
                 confettiContainer.appendChild(particle);
                 setTimeout(() => particle.remove(), 800);
             }
+        }
+
+        function burstShockwave() {
+            const confettiContainer = document.getElementById('confetti-container');
+            if (!confettiContainer) return;
+            const ring = document.createElement('div');
+            ring.className = 'animate-wave';
+            ring.style.cssText = `
+                position:absolute;left:50%;top:50%;
+                width:40px;height:40px;
+                margin-left:-20px;margin-top:-20px;
+                border:3px solid #FBBF24;
+                border-radius:50%;
+                pointer-events:none;
+                box-shadow:0 0 12px #FBBF24;
+            `;
+            confettiContainer.appendChild(ring);
+            setTimeout(() => ring.remove(), 500);
         }
 
         // ======================== 倒计时 ========================
