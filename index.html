@@ -34,6 +34,10 @@
         @keyframes merit-breathe { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
         .animate-vibrate { animation: muyu-vibrate 0.25s ease-out; }
         .animate-float { animation: float-up 0.8s ease-out forwards; }
+        @keyframes stick-hit { 0% { transform: translate(0, 0) rotate(0deg); } 20% { transform: translate(-15px, 45px) rotate(-25deg); } 100% { transform: translate(0, 0) rotate(0deg); } }
+        @keyframes confetti-explode { 0% { transform: translate(0, 0) scale(1); opacity: 1; } 100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; } }
+        .animate-stick { animation: stick-hit 0.28s ease-out; }
+        .animate-confetti { animation: confetti-explode 0.8s ease-out forwards; }
     </style>
 </head>
 <body class="relative w-screen h-screen text-white select-none">
@@ -708,25 +712,34 @@
             const color = activeTerm.color;
 
             zone.innerHTML = `
-                <div id="muyu-container" class="flex flex-col items-center justify-center gap-3 py-3 select-none" style="cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">
-                    <div class="text-center font-mono mb-1">
+                <div id="muyu-container" class="relative flex flex-col items-center justify-center gap-3 py-3 select-none" style="cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">
+                    <div id="confetti-container" class="absolute inset-0 pointer-events-none z-0 overflow-hidden"></div>
+                    <div class="text-center font-mono mb-1 relative z-10">
                         <span class="text-[9px] opacity-40 block uppercase tracking-widest">Total Merit</span>
                         <span id="merit-total-counter" class="text-3xl font-bold tracking-normal" style="color:${color};text-shadow:0 0 14px ${color};animation:merit-breathe 2s ease-in-out infinite">${meritCount}</span>
                     </div>
-                    <svg id="muyu-svg" viewBox="0 0 140 120" width="110" height="94"
-                         style="filter:drop-shadow(0 0 10px ${color});-webkit-filter:drop-shadow(0 0 10px ${color})">
-                        <rect x="14" y="28" width="110" height="62" rx="31" fill="rgba(0,0,0,0.5)" stroke="${color}" stroke-width="2.5"/>
-                        <ellipse cx="30" cy="59" rx="16" ry="20" fill="rgba(0,0,0,0.5)" stroke="${color}" stroke-width="2.5"/>
-                        <circle cx="28" cy="52" r="3.5" fill="${color}"/>
-                        <path d="M17 58 Q21 63 26 58" stroke="${color}" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-                        <path d="M46 32 Q44 59 46 86" stroke="${color}" stroke-width="1.2" opacity="0.5" fill="none"/>
-                        <path d="M55 30 Q53 59 55 88" stroke="${color}" stroke-width="1" opacity="0.4" fill="none"/>
-                        <path d="M64 30 Q62 59 64 88" stroke="${color}" stroke-width="1" opacity="0.3" fill="none"/>
-                        <rect x="82" y="42" width="28" height="34" rx="4" fill="rgba(0,0,0,0.35)" stroke="${color}" stroke-width="1.5"/>
-                        <line x1="88" y1="59" x2="104" y2="59" stroke="${color}" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>
-                        <path d="M124 44 L138 22 L138 96 L124 74" fill="rgba(0,0,0,0.5)" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>
-                    </svg>
-                    <span class="text-[10px] font-mono tracking-widest text-white/25 uppercase">点击积累功德 / TAP FOR MERIT</span>
+                    <div class="relative z-10">
+                        <svg id="muyu-stick" viewBox="0 0 60 100" width="32" height="54" fill="none"
+                             style="position:absolute;top:-24px;right:-18px;filter:drop-shadow(0 0 6px ${color});-webkit-filter:drop-shadow(0 0 6px ${color});z-index:5;pointer-events:none">
+                            <rect x="22" y="40" width="6" height="55" rx="3" fill="rgba(255,255,255,0.12)" stroke="${color}" stroke-width="1.5"/>
+                            <ellipse cx="25" cy="28" rx="14" ry="16" fill="rgba(0,0,0,0.5)" stroke="${color}" stroke-width="2"/>
+                            <ellipse cx="25" cy="22" rx="8" ry="5" fill="rgba(255,255,255,0.08)" stroke="${color}" stroke-width="0.8" opacity="0.6"/>
+                        </svg>
+                        <svg id="muyu-svg" viewBox="0 0 140 120" width="110" height="94"
+                             style="filter:drop-shadow(0 0 10px ${color});-webkit-filter:drop-shadow(0 0 10px ${color})">
+                            <rect x="14" y="28" width="110" height="62" rx="31" fill="rgba(0,0,0,0.5)" stroke="${color}" stroke-width="2.5"/>
+                            <ellipse cx="30" cy="59" rx="16" ry="20" fill="rgba(0,0,0,0.5)" stroke="${color}" stroke-width="2.5"/>
+                            <circle cx="28" cy="52" r="3.5" fill="${color}"/>
+                            <path d="M17 58 Q21 63 26 58" stroke="${color}" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+                            <path d="M46 32 Q44 59 46 86" stroke="${color}" stroke-width="1.2" opacity="0.5" fill="none"/>
+                            <path d="M55 30 Q53 59 55 88" stroke="${color}" stroke-width="1" opacity="0.4" fill="none"/>
+                            <path d="M64 30 Q62 59 64 88" stroke="${color}" stroke-width="1" opacity="0.3" fill="none"/>
+                            <rect x="82" y="42" width="28" height="34" rx="4" fill="rgba(0,0,0,0.35)" stroke="${color}" stroke-width="1.5"/>
+                            <line x1="88" y1="59" x2="104" y2="59" stroke="${color}" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>
+                            <path d="M124 44 L138 22 L138 96 L124 74" fill="rgba(0,0,0,0.5)" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <span class="text-[10px] font-mono tracking-widest text-white/25 uppercase relative z-10">点击积累功德 / TAP FOR MERIT</span>
                 </div>
             `;
 
@@ -740,6 +753,12 @@
         }
 
         function handleMuyuTap(e, svg, color, container) {
+            const stick = document.getElementById('muyu-stick');
+            if (stick) {
+                stick.classList.remove('animate-stick');
+                void stick.offsetWidth;
+                stick.classList.add('animate-stick');
+            }
             svg.classList.remove('animate-vibrate');
             void svg.offsetWidth;
             svg.classList.add('animate-vibrate');
@@ -756,6 +775,10 @@
                 counter.style.textShadow = `0 0 14px ${color}`;
             }
             localStorage.setItem('cyber_merit_count', meritCount);
+
+            if (isCrit) {
+                burstConfetti();
+            }
 
             const rect = container.getBoundingClientRect();
             const baseX = e.clientX || rect.left + rect.width / 2;
@@ -779,6 +802,33 @@
             `;
             document.body.appendChild(span);
             setTimeout(() => span.remove(), 800);
+        }
+
+        function burstConfetti() {
+            const confettiContainer = document.getElementById('confetti-container');
+            if (!confettiContainer) return;
+            const count = 22 + Math.floor(Math.random() * 9);
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 50 + Math.random() * 70;
+                const tx = Math.cos(angle) * dist;
+                const ty = Math.sin(angle) * dist;
+
+                const particle = document.createElement('div');
+                particle.className = 'animate-confetti';
+                const size = 3 + Math.random() * 4;
+                const isCircle = Math.random() > 0.5;
+                particle.style.cssText = `
+                    position:absolute;left:50%;top:50%;
+                    width:${size}px;height:${size}px;
+                    ${isCircle ? 'border-radius:50%' : 'border-radius:1px'};
+                    background:#FBBF24;box-shadow:0 0 5px #FBBF24;
+                    --tx:${tx}px;--ty:${ty}px;
+                    pointer-events:none;
+                `;
+                confettiContainer.appendChild(particle);
+                setTimeout(() => particle.remove(), 800);
+            }
         }
 
         // ======================== 倒计时 ========================
