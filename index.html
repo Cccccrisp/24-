@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>24节气时令数据可视化</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;700&display=swap');
+        body { font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif; background-color: #0a0a0a; overflow: hidden; }
+        .text-glow { text-shadow: 0 0 15px rgba(255,255,255,0.6); }
+        #detail-panel::-webkit-scrollbar { width: 4px; }
+        #detail-panel::-webkit-scrollbar-track { background: transparent; }
+        #detail-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 999px; }
+        @keyframes breathe {
+            0%,100% { box-shadow: 0 0 6px var(--breathe-color, rgba(255,255,255,0.4)); }
+            50% { box-shadow: 0 0 18px var(--breathe-color, rgba(255,255,255,0.9)), 0 0 32px var(--breathe-color, rgba(255,255,255,0.3)); }
+        }
+        @keyframes burst-particle {
+            0% { transform: translate(0,0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--bx), var(--by)) scale(0); opacity: 0; }
+        }
+        @keyframes popcard-in {
+            0% { opacity: 0; transform: translateY(8px) scale(0.95); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .streak-lit { animation: breathe 2.4s ease-in-out infinite; }
+        .checkin-burst { position: fixed; pointer-events: none; z-index: 999; width: 6px; height: 6px; border-radius: 50%; animation: burst-particle 0.8s ease-out forwards; }
+        .popcard-enter { animation: popcard-in 0.25s ease-out forwards; }
+    </style>
+</head>
+<body class="relative w-screen h-screen text-white select-none">
+
+    <canvas id="ambient-canvas" class="absolute inset-0 pointer-events-none z-0"></canvas>
+    <div class="absolute inset-0 bg-black/30 pointer-events-none z-5"></div>
+    <div id="ambient-glow" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[850px] h-[850px] rounded-full blur-[160px] opacity-25 pointer-events-none z-0 transition-all duration-1000"></div>
+
+    <div class="relative w-full h-full flex items-center justify-between px-16 z-10">
+
+        <!-- ===== 左侧星盘区 ===== -->
+        <div id="wheel-area" class="relative w-1/2 h-full flex items-center justify-center">
+            <div id="wheel-container" class="relative w-[600px] h-[600px] rounded-full flex items-center justify-center"></div>
+
+            <!-- 中央核心枢纽 -->
+            <div id="center-hub" class="absolute w-[290px] h-[290px] rounded-full bg-white/5 border border-white/10 backdrop-blur-2xl flex flex-col items-center justify-center text-center p-6 pointer-events-none shadow-2xl">
+                <span class="text-[10px] tracking-[0.4em] text-white/40 uppercase font-mono">Solar Axis</span>
+                <h1 id="center-name" class="text-6xl font-bold my-3 tracking-widest transition-all duration-300">---</h1>
+                <div class="w-12 h-[1px] bg-white/20 my-1"></div>
+                <div class="text-xs font-mono text-white/50 tracking-wide">黄经面: <span id="center-angle" class="text-white font-bold">0</span>°</div>
+                <div class="text-xs font-mono text-white/50 tracking-wide mt-1">日照率: <span id="center-daylight" class="text-white font-bold">0</span></div>
+            </div>
+
+            <!-- 节气浮窗卡片（点击节点或转动星盘时弹出） -->
+            <div id="term-popcard" class="hidden fixed z-[200] w-[260px] bg-black/70 border border-white/15 backdrop-blur-2xl rounded-xl p-4 shadow-2xl pointer-events-none">
+                <div class="flex items-center gap-2 mb-2">
+                    <div id="popcard-dot" class="w-2.5 h-2.5 rounded-full shrink-0"></div>
+                    <h3 id="popcard-name" class="text-lg font-bold tracking-wider text-white">--</h3>
+                    <span id="popcard-angle" class="text-[10px] font-mono text-white/40 ml-auto">315°</span>
+                </div>
+                <div class="flex items-center gap-3 text-[10px] font-mono text-white/35 mb-2.5">
+                    <span>黄经 <b id="popcard-lng" class="text-white/60">--</b>°</span>
+                    <span>日照 <b id="popcard-daylight" class="text-white/60">--</b></span>
+                </div>
+                <p id="popcard-desc" class="text-[11px] leading-relaxed text-white/75 font-sans tracking-wide text-justify"></p>
+                <div class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3 h-3 bg-black/70 border-r border-b border-white/15 rotate-45"></div>
+            </div>
+        </div>
+
+        <!-- ===== 右侧常驻今日面板 ===== -->
+        <div id="detail-panel" class="relative w-[430px] h-[85vh] bg-black/20 border border-white/10 backdrop-blur-3xl rounded-2xl p-6 flex flex-col justify-between overflow-y-auto z-20 shadow-2xl">
+
+            <div>
+                <!-- 赛博撕历：几何日期块 -->
+                <div class="flex gap-4 mb-4">
+                    <div class="relative w-[88px] h-[104px] bg-gradient-to-br from-white/10 to-white/[0.02] border border-white/15 rounded-xl flex flex-col items-center justify-center overflow-hidden shrink-0 shadow-lg">
+                        <div class="absolute top-0 left-0 right-0 h-[20px] bg-white/10 flex items-center justify-center">
+                            <span id="cal-month" class="text-[9px] font-mono text-white/50 tracking-[0.3em] uppercase font-bold">MAY</span>
+                        </div>
+                        <div id="cal-day" class="text-[40px] font-bold mt-2 font-mono tracking-tighter leading-none text-white">18</div>
+                        <div id="cal-week" class="text-[9px] text-white/30 font-mono tracking-wider mt-0.5 uppercase">MON</div>
+                        <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-white/10 rounded-full blur-sm"></div>
+                    </div>
+                    <!-- 天气 + 季节图腾 -->
+                    <div class="flex-1 flex flex-col justify-center space-y-1.5 min-w-0">
+                        <div id="weather-row" class="flex items-center gap-2 text-[11px] font-mono text-white/45">
+                            <span class="text-[15px]">🌐</span>
+                            <span id="weather-text" class="truncate">定位中...</span>
+                        </div>
+                        <div id="totem-row" class="flex items-center gap-2 text-[10px] font-mono text-white/40">
+                            <span id="totem-icon" class="text-sm">--</span>
+                            <span id="totem-text" class="tracking-wider">--</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-0.5">
+                            <span class="text-[9px] text-white/25 font-mono tracking-wider shrink-0">时令进程</span>
+                            <div class="flex-1 h-[2.5px] bg-white/8 rounded-full overflow-hidden">
+                                <div id="term-progress-bar" class="h-full bg-white/60 rounded-full transition-all duration-700" style="width:0%"></div>
+                            </div>
+                            <span id="term-progress-text" class="text-[9px] text-white/30 font-mono shrink-0">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 当月完整月历 7×5 网格 -->
+                <div class="mb-4 bg-white/[0.02] border border-white/5 rounded-xl p-3">
+                    <div class="flex justify-between items-center mb-2">
+                        <span id="month-label" class="text-[9px] font-mono text-white/30 uppercase tracking-widest">May 2026</span>
+                        <span class="text-[8px] font-mono text-white/20 tracking-wider">SUN MON TUE WED THU FRI SAT</span>
+                    </div>
+                    <div id="monthly-calendar" class="grid grid-cols-7 gap-[3px]"></div>
+                </div>
+
+                <!-- 今日宜忌（去重） -->
+                <div class="flex gap-3 mb-4">
+                    <div class="flex-1 bg-white/[0.03] border border-white/10 rounded-xl p-3 space-y-1.5">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_6px_rgba(52,211,153,0.6)]"></span>
+                            <span id="daily-yee-1" class="text-[11px] text-white/85 font-sans truncate block">--</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400/60 shrink-0"></span>
+                            <span id="daily-yee-2" class="text-[11px] text-white/85 font-sans truncate block">--</span>
+                        </div>
+                    </div>
+                    <div class="flex-1 bg-white/[0.03] border border-white/10 rounded-xl p-3 space-y-1.5">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0 shadow-[0_0_6px_rgba(251,113,133,0.6)]"></span>
+                            <span id="daily-jee-1" class="text-[11px] text-white/70 font-sans truncate block">--</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-400/60 shrink-0"></span>
+                            <span id="daily-jee-2" class="text-[11px] text-white/70 font-sans truncate block">--</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-between text-[10px] font-mono text-white/35 mb-4 px-0.5 tracking-wide">
+                    <span>吉神方位 <span id="lucky-dir" class="text-white/55">--</span></span>
+                    <span>时令吉时 <span id="lucky-hour" class="text-white/55">--</span></span>
+                </div>
+
+                <!-- 时令特征描述 -->
+                <div class="space-y-1.5 mb-2">
+                    <span class="text-[10px] tracking-widest text-white/30 uppercase font-mono block">Phenology / 时令特征</span>
+                    <p id="long-desc" class="text-sm leading-relaxed text-white/80 font-sans tracking-wide text-justify min-h-[80px]"></p>
+                </div>
+            </div>
+
+            <!-- 底部签到 -->
+            <div class="border-t border-white/10 pt-4 mt-3">
+                <button id="daily-checkin-btn" class="w-full bg-white text-black hover:bg-white/90 active:scale-[0.99] transition-all py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest cursor-pointer shadow-md">
+                    签到今日时令 / ALIGN WITH TIME
+                </button>
+                <div class="mt-4 bg-white-[0.01] border border-white/5 p-3 rounded-xl">
+                    <div class="flex justify-between items-center mb-2.5">
+                        <span class="text-[10px] tracking-widest text-white/30 uppercase font-mono">Streak Matrix / 7日行度</span>
+                        <span id="streak-count" class="text-[10px] font-mono text-white/50 bg-white/5 px-2 py-0.5 rounded-full">连签 0 天</span>
+                    </div>
+                    <div id="streak-matrix" class="grid grid-cols-7 gap-2"></div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部控制条 -->
+    <div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center space-x-5 bg-black/60 border border-white/10 px-5 py-2 rounded-full backdrop-blur-md z-30 shadow-2xl">
+        <button onclick="navigateTerm(-1)" class="hover:text-white text-white/30 cursor-pointer text-xs font-mono font-bold transition-colors">&lt;</button>
+        <span id="countdown-timer" class="text-[10px] font-mono tracking-widest text-white/60 min-w-[200px] text-center uppercase">System Syncing...</span>
+        <button onclick="navigateTerm(1)" class="hover:text-white text-white/30 cursor-pointer text-xs font-mono font-bold transition-colors">&gt;</button>
+        <span class="text-white/15">|</span>
+        <button id="reset-btn" onclick="resetToToday()" class="hover:text-white text-white/30 cursor-pointer text-[9px] font-mono font-bold transition-colors tracking-widest uppercase whitespace-nowrap">Reset Now</button>
+    </div>
+
+
+
+    <script src="data.js"></script>
+    <script>
+        // ======================== 全局状态 ========================
+        let currentIndex = 0;       // 星盘当前节气索引
+        let todayTermIndex = 0;     // 今日真实节气索引（锁定右侧面板）
+        let currentRotation = 0;
+        const radius = 240;
+        let canvas, ctx, particles = [];
+        let mouseX = 0, mouseY = 0;
+        let weatherData = null;
+        let popupActive = false;
+
+        // ======================== 工具函数 ========================
+        function dateHash(str) {
+            let h = 0;
+            for (let i = 0; i < str.length; i++) { h = ((h << 5) - h) + str.charCodeAt(i); h |= 0; }
+            return Math.abs(h);
+        }
+
+        // 去重切片：使用 Set 确保从数组中选取 count 条绝对不重复的项
+        function dailyPickDeduped(arr, count, seedStr) {
+            const seed = dateHash(seedStr);
+            const n = arr.length;
+            const used = new Set();
+            const result = [];
+            let offset = 0;
+            while (result.length < count && result.length < n) {
+                const idx = (seed + offset * 7 + offset * offset) % n;
+                if (!used.has(idx)) { used.add(idx); result.push(arr[idx]); }
+                offset++;
+            }
+            return result;
+        }
+
+        function getTodayStr() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        }
+
+        function getSeason(termId) {
+            if (termId >= 1 && termId <= 6) return 'spring';
+            if (termId >= 7 && termId <= 12) return 'summer';
+            if (termId >= 13 && termId <= 18) return 'autumn';
+            return 'winter';
+        }
+
+        // 岁时物候图腾
+        function getSeasonTotem(termId) {
+            const s = getSeason(termId);
+            if (s === 'spring') return { en: 'MUGUET', cn: '柔木青桃', icon: '🌱', char: '桃' };
+            if (s === 'summer') return { en: 'LOTUS', cn: '盛夏碧荷', icon: '🪷', char: '荷' };
+            if (s === 'autumn') return { en: 'ACER', cn: '暮秋霜枫', icon: '🍁', char: '枫' };
+            return { en: 'PLUM', cn: '傲雪寒梅', icon: '❄️', char: '梅' };
+        }
+
+        // 查找今日对应的节气索引
+        function findTodayTermIndex() {
+            const now = new Date();
+            const month = now.getMonth() + 1;
+            const day = now.getDate();
+            const termDates = [
+                {id:23,m:1,d:5},{id:24,m:1,d:20},{id:1,m:2,d:4},{id:2,m:2,d:19},
+                {id:3,m:3,d:5},{id:4,m:3,d:20},{id:5,m:4,d:4},{id:6,m:4,d:20},
+                {id:7,m:5,d:5},{id:8,m:5,d:21},{id:9,m:6,d:5},{id:10,m:6,d:21},
+                {id:11,m:7,d:7},{id:12,m:7,d:22},{id:13,m:8,d:7},{id:14,m:8,d:23},
+                {id:15,m:9,d:7},{id:16,m:9,d:23},{id:17,m:10,d:8},{id:18,m:10,d:23},
+                {id:19,m:11,d:7},{id:20,m:11,d:22},{id:21,m:12,d:7},{id:22,m:12,d:21}
+            ];
+            let matchedId = 22;
+            for (let i = 0; i < termDates.length; i++) {
+                if (month < termDates[i].m || (month === termDates[i].m && day < termDates[i].d)) {
+                    matchedId = i === 0 ? termDates[termDates.length-1].id : termDates[i-1].id;
+                    break;
+                }
+                if (month === 12 && day >= 21) matchedId = 22;
+            }
+            const idx = solarTerms.findIndex(t => t.id === matchedId);
+            return idx >= 0 ? idx : 0;
+        }
+
+        // ======================== 页面初始化 ========================
+        document.addEventListener('DOMContentLoaded', () => {
+            initCalendar();
+            renderWheelNodes();
+            initCanvas();
+            fetchWeather();
+
+            // 确定今日节气
+            todayTermIndex = findTodayTermIndex();
+            updateTodayPanel();       // 锁定右侧面板为今日数据
+            renderMonthlyCalendar();
+            renderStreakMatrix();
+            checkCheckinStatus();
+
+            // 初始星盘归位到今日节气
+            jumpToTerm(todayTermIndex);
+
+            window.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+            window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+
+            // 触控板滚动：右侧面板内滚动不触发星盘旋转
+            window.addEventListener('wheel', (e) => {
+                if (e.target.closest('#detail-panel')) return;
+                if (e.deltaY > 0) navigateTerm(1);
+                else navigateTerm(-1);
+            }, { passive: true });
+
+            // 点击星盘空白区域关闭浮窗
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.term-node') && !e.target.closest('#term-popcard') && !e.target.closest('#wheel-area button')) {
+                    hideTermPopcard();
+                }
+            });
+
+            document.getElementById('daily-checkin-btn').addEventListener('click', executeDailyCheckin);
+            document.getElementById('reset-btn').addEventListener('click', resetToToday);
+            setInterval(updateCountdown, 1000);
+        });
+
+        // ======================== 日历与日期 ========================
+        function initCalendar() {
+            const now = new Date();
+            const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+            const weeks = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+            document.getElementById('cal-month').innerText = months[now.getMonth()];
+            document.getElementById('cal-day').innerText = now.getDate();
+            document.getElementById('cal-week').innerText = weeks[now.getDay()];
+            document.getElementById('month-label').innerText = `${months[now.getMonth()]} ${now.getFullYear()}`;
+        }
+
+        // ======================== 当月完整月历 ========================
+        function renderMonthlyCalendar() {
+            const grid = document.getElementById('monthly-calendar');
+            grid.innerHTML = '';
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const today = now.getDate();
+            const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+            const totalDays = new Date(year, month + 1, 0).getDate();
+            const todayTerm = solarTerms[todayTermIndex];
+            const todayColor = todayTerm.color;
+
+            for (let i = 0; i < firstDay; i++) {
+                const empty = document.createElement('div');
+                empty.className = 'h-[22px] rounded-sm';
+                grid.appendChild(empty);
+            }
+            for (let d = 1; d <= totalDays; d++) {
+                const cell = document.createElement('div');
+                const isToday = d === today;
+                cell.className = `h-[22px] rounded-sm flex items-center justify-center text-[10px] font-mono transition-all ${
+                    isToday ? 'font-bold scale-110' : 'text-white/25'
+                }`;
+                cell.innerText = d;
+                if (isToday) {
+                    cell.style.backgroundColor = todayColor;
+                    cell.style.color = '#0a0a0a';
+                    cell.style.boxShadow = `0 0 10px ${todayColor}80`;
+                }
+                grid.appendChild(cell);
+            }
+        }
+
+        // ======================== 单点天气流 (wttr.in 自动定位) ========================
+        const weatherMap = {
+            'Clear': '晴', 'Sunny': '晴', 'Partly cloudy': '多云', 'Cloudy': '阴',
+            'Overcast': '阴', 'Mist': '雾', 'Fog': '雾', 'Haze': '霾',
+            'Rain': '雨', 'Light rain': '小雨', 'Patchy rain nearby': '阵雨',
+            'Moderate rain': '中雨', 'Heavy rain': '大雨', 'Snow': '雪',
+            'Light snow': '小雪', 'Moderate snow': '中雪', 'Heavy snow': '大雪',
+            'Thunder': '雷', 'Drizzle': '毛毛雨', 'Freezing rain': '冻雨'
+        };
+
+        const cityMap = {
+            'Shek Pai Wan': '香港', 'Hong Kong': '香港', 'Kowloon': '香港',
+            'Shanghai': '上海', 'Beijing': '北京', 'Guangzhou': '广州',
+            'Shenzhen': '深圳', 'Hangzhou': '杭州', 'Chengdu': '成都',
+            'Nanjing': '南京', 'Wuhan': '武汉', 'Chongqing': '重庆',
+            'Taipei': '台北', 'Tokyo': '东京', 'Seoul': '首尔',
+            'Singapore': '新加坡', 'Bangkok': '曼谷', 'London': '伦敦',
+            'New York': '纽约', 'Los Angeles': '洛杉矶', 'Paris': '巴黎'
+        };
+
+        function sanitizeCity(raw) {
+            for (const [key, val] of Object.entries(cityMap)) {
+                if (raw.includes(key)) return val;
+            }
+            if (raw.length > 10) return '当前位置';
+            return raw;
+        }
+
+        async function fetchWeather() {
+            const txtEl = document.getElementById('weather-text');
+            try {
+                const resp = await fetch('https://wttr.in/?format=j1');
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const data = await resp.json();
+                const rawCity = data.nearest_area[0].areaName[0].value;
+                const city = sanitizeCity(rawCity);
+                const cond = data.current_condition[0];
+                const rawWeather = cond.weatherDesc[0].value;
+                const temp = cond.temp_C;
+                const weather = weatherMap[rawWeather] || rawWeather.split(' ').slice(0, 2).join(' ');
+                weatherData = { city, weather, temp };
+                txtEl.innerText = `${city} · ${weather} · ${temp}℃`;
+            } catch (e) {
+                console.warn('天气接口不可达:', e.message);
+                txtEl.innerText = 'Chrono Syncing · 岁时流转';
+            }
+        }
+
+        // ======================== 星盘渲染 ========================
+        function renderWheelNodes() {
+            const container = document.getElementById('wheel-container');
+            container.innerHTML = '';
+            solarTerms.forEach((term, index) => {
+                const btn = document.createElement('button');
+                btn.className = `absolute text-xs tracking-widest text-white/20 hover:text-white font-sans cursor-pointer transition-all duration-300 term-node node-${index}`;
+                btn.innerText = term.name;
+                btn.style.transformOrigin = 'center center';
+                const rad = (term.angle - 90) * Math.PI / 180;
+                btn.style.left = `${radius * Math.cos(rad) + radius + 40}px`;
+                btn.style.top = `${radius * Math.sin(rad) + radius + 100}px`;
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    jumpToTerm(index);
+                    showTermPopcard(term, btn);
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        // ======================== 星盘旋转 ========================
+        function jumpToTerm(index) {
+            currentIndex = (index + 24) % 24;
+            const term = solarTerms[currentIndex];
+            const targetRotation = 270 - term.angle;
+            let diff = (targetRotation - currentRotation) % 360;
+            if (diff > 180) diff -= 360;
+            if (diff < -180) diff += 360;
+            currentRotation += diff;
+
+            gsap.to('#wheel-container', {
+                rotation: currentRotation,
+                duration: 0.8,
+                ease: 'power3.out',
+                onUpdate: () => {
+                    solarTerms.forEach((_, idx) => {
+                        gsap.set(`.node-${idx}`, { rotation: -window.gsap.getProperty('#wheel-container', 'rotation') });
+                    });
+                }
+            });
+
+            // 高亮当前节点
+            solarTerms.forEach((_, idx) => {
+                const el = document.querySelector(`.node-${idx}`);
+                if (!el) return;
+                if (idx === currentIndex) {
+                    el.className = `absolute text-xs tracking-widest font-sans cursor-pointer transition-all duration-300 term-node node-${idx} text-white text-glow scale-125 font-bold`;
+                } else {
+                    el.className = `absolute text-xs tracking-widest font-sans cursor-pointer transition-all duration-300 term-node node-${idx} text-white/20`;
+                }
+            });
+
+            updateCenterHub(term);
+            updateAmbientGlow(term);
+            // 如果浮窗可见，更新其内容；否则依据是否是用户主动导航来决定是否展示
+            if (popupActive) {
+                updatePopcardContent(term);
+                positionPopcardNearHub();
+            }
+        }
+
+        function navigateTerm(direction) {
+            jumpToTerm(currentIndex + direction);
+            // 滚轮驱动时：展示浮窗并定位在中央枢纽下方
+            const term = solarTerms[currentIndex];
+            showTermPopcard(term, document.getElementById('center-hub'));
+        }
+
+        function resetToToday() {
+            todayTermIndex = findTodayTermIndex();
+            updateTodayPanel();
+            renderMonthlyCalendar();
+            renderStreakMatrix();
+            jumpToTerm(todayTermIndex);
+            const term = solarTerms[todayTermIndex];
+            showTermPopcard(term, document.getElementById('center-hub'));
+        }
+
+        // ======================== 中央枢纽更新（仅星盘） ========================
+        function updateCenterHub(term) {
+            document.getElementById('center-name').innerText = term.name;
+            document.getElementById('center-angle').innerText = term.angle;
+            document.getElementById('center-daylight').innerText = term.daylight.toFixed(2);
+        }
+
+        function updateAmbientGlow(term) {
+            document.getElementById('ambient-glow').style.backgroundColor = term.color;
+        }
+
+        // ======================== 今日面板更新（锁定） ========================
+        function updateTodayPanel() {
+            const term = solarTerms[todayTermIndex];
+            const now = new Date();
+            const dateSeed = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+            const meta = term.metaphysics || { yee: ['宜·顺应自然'], jee: ['忌·逆天而行'], lucky_direction: '财神正南', lucky_hours: '午时' };
+
+            // 去重切片
+            const yee2 = dailyPickDeduped(meta.yee, 2, dateSeed + 'yee');
+            const jee2 = dailyPickDeduped(meta.jee, 2, dateSeed + 'jee');
+
+            document.getElementById('daily-yee-1').innerText = yee2[0];
+            document.getElementById('daily-yee-2').innerText = yee2[1];
+            document.getElementById('daily-jee-1').innerText = jee2[0];
+            document.getElementById('daily-jee-2').innerText = jee2[1];
+            document.getElementById('lucky-dir').innerText = meta.lucky_direction || '--';
+            document.getElementById('lucky-hour').innerText = meta.lucky_hours || '--';
+
+            const desc = term.long_description || '时令交替，万物随天道周期流转。';
+            document.getElementById('long-desc').innerText = desc;
+
+            // 进度条
+            const progress = Math.min(100, Math.max(10, (now.getDate() % 15) / 15 * 100));
+            document.getElementById('term-progress-text').innerText = `${Math.max(1, now.getDate() % 15)}d`;
+            document.getElementById('term-progress-bar').style.width = `${progress}%`;
+
+            // 季节图腾
+            const totem = getSeasonTotem(term.id);
+            document.getElementById('totem-icon').innerText = totem.icon;
+            document.getElementById('totem-text').innerText = `${totem.en} · ${totem.cn}`;
+
+            updateAmbientGlow(term);
+        }
+
+        // ======================== 浮窗卡片 ========================
+        function showTermPopcard(term, nearElement) {
+            const popup = document.getElementById('term-popcard');
+            updatePopcardContent(term);
+            positionPopcard(popup, nearElement);
+            popup.classList.remove('hidden');
+            popup.classList.add('popcard-enter');
+            popupActive = true;
+        }
+
+        function hideTermPopcard() {
+            const popup = document.getElementById('term-popcard');
+            popup.classList.add('hidden');
+            popup.classList.remove('popcard-enter');
+            popupActive = false;
+        }
+
+        function updatePopcardContent(term) {
+            document.getElementById('popcard-name').innerText = term.name;
+            document.getElementById('popcard-lng').innerText = term.angle;
+            document.getElementById('popcard-daylight').innerText = term.daylight.toFixed(2);
+            document.getElementById('popcard-desc').innerText = term.long_description || '时令交替，万物随天道周期流转。';
+            document.getElementById('popcard-dot').style.backgroundColor = term.color;
+        }
+
+        function positionPopcard(popup, nearElement) {
+            const rect = nearElement.getBoundingClientRect();
+            let left = rect.right + 12;
+            let top = rect.top - 20;
+            // 边界钳制
+            if (left + 272 > window.innerWidth) left = rect.left - 272;
+            if (top + 200 > window.innerHeight) top = window.innerHeight - 210;
+            if (top < 10) top = 10;
+            popup.style.left = left + 'px';
+            popup.style.top = top + 'px';
+        }
+
+        function positionPopcardNearHub() {
+            const popup = document.getElementById('term-popcard');
+            const hub = document.getElementById('center-hub');
+            const rect = hub.getBoundingClientRect();
+            popup.style.left = (rect.left + rect.width/2 - 130) + 'px';
+            popup.style.top = (rect.bottom + 8) + 'px';
+        }
+
+        // ======================== 签到与连签矩阵 ========================
+        function renderStreakMatrix() {
+            const matrix = document.getElementById('streak-matrix');
+            matrix.innerHTML = '';
+            const checkins = JSON.parse(localStorage.getItem('solar_checkins') || '[]');
+            const now = new Date();
+            const todayStr = getTodayStr();
+            const activeColor = solarTerms[todayTermIndex].color;
+
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+                const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                const checked = checkins.includes(ds);
+                const isToday = ds === todayStr;
+
+                const block = document.createElement('div');
+                block.className = `h-7 rounded-md border transition-all duration-500 ${
+                    checked ? 'border-transparent shadow-lg scale-105' : 'bg-white/5 border-white/10'
+                }`;
+                if (checked) {
+                    block.style.backgroundColor = activeColor;
+                    if (isToday) {
+                        block.style.setProperty('--breathe-color', activeColor);
+                        block.classList.add('streak-lit');
+                    }
+                }
+                if (isToday && !checked) {
+                    block.style.boxShadow = `inset 0 0 0 1px ${activeColor}40`;
+                }
+                matrix.appendChild(block);
+            }
+        }
+
+        function checkCheckinStatus() {
+            const todayStr = getTodayStr();
+            const checkins = JSON.parse(localStorage.getItem('solar_checkins') || '[]');
+            const btn = document.getElementById('daily-checkin-btn');
+            let streak = 0;
+            let cd = new Date();
+            while (true) {
+                const cs = `${cd.getFullYear()}-${String(cd.getMonth()+1).padStart(2,'0')}-${String(cd.getDate()).padStart(2,'0')}`;
+                if (checkins.includes(cs)) { streak++; cd.setDate(cd.getDate() - 1); }
+                else break;
+            }
+            document.getElementById('streak-count').innerText = `连签 ${streak} 天`;
+            if (checkins.includes(todayStr)) {
+                btn.innerText = `今日已顺应时令 / STREAK ${streak} DAYS`;
+                btn.className = 'w-full bg-white/5 text-white/30 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest cursor-not-allowed border border-white/5 shadow-none';
+                btn.disabled = true;
+            }
+        }
+
+        function executeDailyCheckin() {
+            const todayStr = getTodayStr();
+            let checkins = JSON.parse(localStorage.getItem('solar_checkins') || '[]');
+            if (checkins.includes(todayStr)) return;
+            checkins.push(todayStr);
+            localStorage.setItem('solar_checkins', JSON.stringify(checkins));
+
+            const cx = window.innerWidth / 2;
+            const cy = window.innerHeight / 2;
+            const termColor = solarTerms[todayTermIndex].color;
+
+            // DOM 粒子爆裂
+            for (let i = 0; i < 50; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 60 + Math.random() * 180;
+                const el = document.createElement('div');
+                el.className = 'checkin-burst';
+                el.style.left = cx + 'px';
+                el.style.top = cy + 'px';
+                el.style.backgroundColor = termColor;
+                el.style.boxShadow = `0 0 8px ${termColor}`;
+                el.style.setProperty('--bx', Math.cos(angle) * dist + 'px');
+                el.style.setProperty('--by', Math.sin(angle) * dist + 'px');
+                el.style.width = (3 + Math.random() * 5) + 'px';
+                el.style.height = el.style.width;
+                el.style.animationDuration = (0.5 + Math.random() * 0.8) + 's';
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 1400);
+            }
+            // Canvas 粒子
+            for (let i = 0; i < 40; i++) {
+                let p = createParticle(true);
+                p.x = cx; p.y = cy;
+                p.vx = Math.random() * 6 - 3;
+                p.vy = Math.random() * 6 - 3;
+                p.size = Math.random() * 3 + 2;
+                particles.push(p);
+            }
+
+            renderStreakMatrix();
+            checkCheckinStatus();
+            gsap.from('#daily-checkin-btn', { scale: 0.94, duration: 0.4, ease: 'elastic.out(1, 0.4)' });
+        }
+
+        // ======================== 倒计时 ========================
+        function updateCountdown() {
+            const now = new Date();
+            const nextTransition = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 3, 23, 59, 59);
+            const diff = nextTransition - now;
+            if (diff <= 0) { document.getElementById('countdown-timer').innerText = 'CHRONO INTERSECTION / 气象交接中'; return; }
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const secs = Math.floor((diff % (1000 * 60)) / 1000);
+            document.getElementById('countdown-timer').innerText = `${days}D ${hours}H ${mins}M ${secs}S TO NEXT TERM`;
+        }
+
+        // ======================== Canvas 粒子引擎 ========================
+        function initCanvas() {
+            canvas = document.getElementById('ambient-canvas');
+            ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            particles = [];
+            for (let i = 0; i < 60; i++) { particles.push(createParticle(true)); }
+            animateParticles();
+        }
+
+        function createParticle(randomY) {
+            return {
+                x: Math.random() * canvas.width,
+                y: randomY ? Math.random() * canvas.height : canvas.height + 10,
+                size: Math.random() * 2.5 + 1,
+                vx: Math.random() * 0.4 - 0.2,
+                vy: 0,
+                alpha: Math.random() * 0.4 + 0.1,
+                rotation: Math.random() * Math.PI,
+                rotSpeed: Math.random() * 0.02 - 0.01
+            };
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const termId = solarTerms[currentIndex].id;
+            const season = getSeason(termId);
+
+            particles.forEach((p, idx) => {
+                if (season === 'spring') {
+                    p.vy = -Math.random() * 0.3 - 0.1;
+                    ctx.fillStyle = `rgba(143, 214, 148, ${p.alpha})`;
+                } else if (season === 'summer') {
+                    p.vy = Math.random() * 0.6 - 0.3;
+                    p.vx += Math.random() * 0.1 - 0.05;
+                    ctx.fillStyle = `rgba(255, 213, 79, ${p.alpha})`;
+                } else if (season === 'autumn') {
+                    p.vy = Math.random() * 0.25 + 0.1;
+                    p.rotation += p.rotSpeed;
+                    ctx.fillStyle = `rgba(232, 155, 92, ${p.alpha})`;
+                } else {
+                    p.vy = Math.random() * 1.0 + 0.5;
+                    ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
+                }
+
+                const dx = mouseX - p.x;
+                const dy = mouseY - p.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 160) {
+                    const force = (160 - dist) / 160;
+                    p.x -= (dx / dist) * force * 2.5;
+                    p.y -= (dy / dist) * force * 2.5;
+                }
+
+                p.x += p.vx; p.y += p.vy;
+
+                if (p.y < -10 || p.y > canvas.height + 10 || p.x < -10 || p.x > canvas.width + 10) {
+                    particles[idx] = createParticle(false);
+                    if (season === 'spring') particles[idx].y = canvas.height + 5;
+                    if (season === 'winter') particles[idx].y = -5;
+                }
+
+                ctx.beginPath();
+                if (season === 'autumn') {
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(p.rotation);
+                    ctx.fillRect(-p.size, -p.size, p.size * 2, p.size);
+                    ctx.restore();
+                } else {
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+    </script>
+</body>
+</html>
