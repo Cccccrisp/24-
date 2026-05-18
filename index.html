@@ -29,10 +29,10 @@
         .streak-lit { animation: breathe 2.4s ease-in-out infinite; }
         .checkin-burst { position: fixed; pointer-events: none; z-index: 999; width: 6px; height: 6px; border-radius: 50%; animation: burst-particle 0.8s ease-out forwards; }
         .popcard-enter { animation: popcard-in 0.25s ease-out forwards; }
-        @keyframes muyu-pop { 0% { transform: scale(1); } 30% { transform: scale(0.92); } 100% { transform: scale(1); } }
-        @keyframes float-up { 0% { transform: translateY(0) scale(0.8); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-60px) scale(1.1); opacity: 0; } }
+        @keyframes muyu-vibrate { 0% { transform: scale(1) rotate(0deg); } 15% { transform: scale(0.9) translate(-3px, 2px) rotate(-2deg); } 30% { transform: scale(0.9) translate(3px, -2px) rotate(2deg); } 50% { transform: scale(0.95) translate(-1px, -1px) rotate(-1deg); } 70% { transform: scale(0.95) translate(1px, 1px) rotate(1deg); } 100% { transform: scale(1) rotate(0deg); } }
+        @keyframes float-up { 0% { transform: translateY(0) scale(0.8); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-70px) scale(1.1); opacity: 0; } }
         @keyframes merit-breathe { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
-        .animate-muyu { animation: muyu-pop 0.15s ease-out; }
+        .animate-vibrate { animation: muyu-vibrate 0.25s ease-out; }
         .animate-float { animation: float-up 0.8s ease-out forwards; }
     </style>
 </head>
@@ -713,15 +713,15 @@
                         <span class="text-[9px] opacity-40 block uppercase tracking-widest">Total Merit</span>
                         <span id="merit-total-counter" class="text-3xl font-bold tracking-normal" style="color:${color};text-shadow:0 0 14px ${color};animation:merit-breathe 2s ease-in-out infinite">${meritCount}</span>
                     </div>
-                    <svg id="muyu-svg" viewBox="0 0 140 120" width="110" height="94" fill="none" class="transition-transform duration-75"
+                    <svg id="muyu-svg" viewBox="0 0 140 120" width="110" height="94"
                          style="filter:drop-shadow(0 0 10px ${color});-webkit-filter:drop-shadow(0 0 10px ${color})">
                         <rect x="14" y="28" width="110" height="62" rx="31" fill="rgba(0,0,0,0.5)" stroke="${color}" stroke-width="2.5"/>
                         <ellipse cx="30" cy="59" rx="16" ry="20" fill="rgba(0,0,0,0.5)" stroke="${color}" stroke-width="2.5"/>
                         <circle cx="28" cy="52" r="3.5" fill="${color}"/>
-                        <path d="M17 58 Q21 63 26 58" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>
-                        <path d="M46 32 Q44 59 46 86" stroke="${color}" stroke-width="1.2" opacity="0.5"/>
-                        <path d="M55 30 Q53 59 55 88" stroke="${color}" stroke-width="1" opacity="0.4"/>
-                        <path d="M64 30 Q62 59 64 88" stroke="${color}" stroke-width="1" opacity="0.3"/>
+                        <path d="M17 58 Q21 63 26 58" stroke="${color}" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+                        <path d="M46 32 Q44 59 46 86" stroke="${color}" stroke-width="1.2" opacity="0.5" fill="none"/>
+                        <path d="M55 30 Q53 59 55 88" stroke="${color}" stroke-width="1" opacity="0.4" fill="none"/>
+                        <path d="M64 30 Q62 59 64 88" stroke="${color}" stroke-width="1" opacity="0.3" fill="none"/>
                         <rect x="82" y="42" width="28" height="34" rx="4" fill="rgba(0,0,0,0.35)" stroke="${color}" stroke-width="1.5"/>
                         <line x1="88" y1="59" x2="104" y2="59" stroke="${color}" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>
                         <path d="M124 44 L138 22 L138 96 L124 74" fill="rgba(0,0,0,0.5)" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>
@@ -740,11 +740,15 @@
         }
 
         function handleMuyuTap(e, svg, color, container) {
-            svg.classList.remove('animate-muyu');
+            svg.classList.remove('animate-vibrate');
             void svg.offsetWidth;
-            svg.classList.add('animate-muyu');
+            svg.classList.add('animate-vibrate');
 
-            meritCount++;
+            const critRoll = Math.random();
+            const isCrit = critRoll < 0.1;
+            const increment = isCrit ? 10 : 1;
+
+            meritCount += increment;
             const counter = document.getElementById('merit-total-counter');
             if (counter) {
                 counter.innerText = meritCount;
@@ -759,14 +763,18 @@
             const jitterX = (Math.random() - 0.5) * 30;
             const jitterY = (Math.random() - 0.5) * 10;
 
+            const floatColor = isCrit ? '#FBBF24' : color;
+            const floatText = isCrit ? '💥 好运木鱼 功德+10' : '功德 +1';
+            const floatShadow = isCrit ? '0 0 12px #FBBF24' : `0 0 8px ${color}`;
+
             const span = document.createElement('span');
             span.className = 'animate-float';
-            span.innerText = '功德 +1';
+            span.innerText = floatText;
             span.style.cssText = `
                 position:fixed;z-index:999;pointer-events:none;
-                left:${baseX - 28 + jitterX}px;top:${baseY - 10 + jitterY}px;
+                left:${baseX - 40 + jitterX}px;top:${baseY - 10 + jitterY}px;
                 font-family:'Space Grotesk',monospace;font-size:12px;font-weight:700;
-                color:${color};text-shadow:0 0 8px ${color};
+                color:${floatColor};text-shadow:${floatShadow};
                 letter-spacing:0.1em;white-space:nowrap;
             `;
             document.body.appendChild(span);
