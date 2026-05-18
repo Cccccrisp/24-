@@ -29,13 +29,20 @@
         .streak-lit { animation: breathe 2.4s ease-in-out infinite; }
         .checkin-burst { position: fixed; pointer-events: none; z-index: 999; width: 6px; height: 6px; border-radius: 50%; animation: burst-particle 0.8s ease-out forwards; }
         .popcard-enter { animation: popcard-in 0.25s ease-out forwards; }
+        @keyframes muyu-pop { 0% { transform: scale(1); } 30% { transform: scale(0.92); } 100% { transform: scale(1); } }
+        @keyframes float-up { 0% { transform: translateY(0) scale(0.8); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-60px) scale(1.1); opacity: 0; } }
+        .animate-muyu { animation: muyu-pop 0.15s ease-out; }
+        .animate-float { animation: float-up 0.8s ease-out forwards; }
     </style>
 </head>
 <body class="relative w-screen h-screen text-white select-none">
 
+    <!-- ===== 全屏弥散光背景底座 ===== -->
+    <div id="ambient-backdrop" class="fixed inset-0 w-screen h-screen -z-50 bg-[#070708] transition-all duration-1000 ease-in-out pointer-events-none">
+        <div id="ambient-glow" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120vw] h-[120vh] rounded-full filter blur-[140px] opacity-20 transition-all duration-1000 ease-in-out"></div>
+    </div>
     <canvas id="ambient-canvas" class="absolute inset-0 pointer-events-none z-0"></canvas>
     <div class="absolute inset-0 bg-black/30 pointer-events-none z-5"></div>
-    <div id="ambient-glow" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[850px] h-[850px] rounded-full blur-[160px] opacity-25 pointer-events-none z-0 transition-all duration-1000"></div>
 
     <!-- ===== 响应式主舞台 ===== -->
     <div class="relative w-full h-full flex flex-col md:flex-row items-center justify-between px-4 pb-16 pt-4 md:px-16 md:pb-0 md:pt-0 overflow-hidden z-10">
@@ -45,7 +52,7 @@
             <div id="wheel-container" class="relative w-[600px] h-[600px] rounded-full flex items-center justify-center"></div>
 
             <!-- 中央核心枢纽 -->
-            <div id="center-hub" class="absolute w-[290px] h-[290px] rounded-full bg-white/5 border border-white/10 backdrop-blur-2xl flex flex-col items-center justify-center text-center p-6 pointer-events-none shadow-2xl">
+            <div id="center-hub" class="absolute w-[290px] h-[290px] rounded-full bg-white/5 border border-white/10 backdrop-blur-2xl flex flex-col items-center justify-center text-center p-6 pointer-events-none shadow-2xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
                 <span class="text-[10px] tracking-[0.4em] text-white/40 uppercase font-mono">Solar Axis</span>
                 <h1 id="center-name" class="text-6xl font-bold my-3 tracking-widest transition-all duration-300">---</h1>
                 <div class="w-12 h-[1px] bg-white/20 my-1"></div>
@@ -55,7 +62,7 @@
         </div>
 
         <!-- ===== 视窗 B：撕历 ===== -->
-        <div id="detail-panel" class="hidden md:block relative w-full md:w-[430px] h-[calc(100vh-140px)] md:h-[85vh] bg-black/20 border border-white/10 backdrop-blur-3xl rounded-2xl p-6 flex flex-col justify-between overflow-y-auto z-20 shadow-2xl">
+        <div id="detail-panel" class="hidden md:block relative w-full md:w-[430px] h-[calc(100vh-140px)] md:h-[85vh] bg-black/20 border border-white/10 backdrop-blur-3xl rounded-2xl p-6 flex flex-col justify-between overflow-y-auto z-20 shadow-2xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
 
             <div>
                 <!-- 赛博撕历：几何日期块 -->
@@ -132,12 +139,12 @@
                 </div>
             </div>
 
-            <!-- 底部签到 -->
-            <div class="border-t border-white/10 pt-4 mt-3">
+            <!-- ===== 签到 / 木鱼双态区 ===== -->
+            <div id="checkin-muyu-zone" class="border-t border-white/10 pt-4 mt-3">
                 <button id="daily-checkin-btn" class="w-full bg-white text-black hover:bg-white/90 active:scale-[0.99] transition-all py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest cursor-pointer shadow-md">
                     签到今日时令 / ALIGN WITH TIME
                 </button>
-                <div class="mt-4 bg-white-[0.01] border border-white/5 p-3 rounded-xl">
+                <div id="streak-block" class="mt-4 bg-white-[0.01] border border-white/5 p-3 rounded-xl">
                     <div class="flex justify-between items-center mb-2.5">
                         <span class="text-[10px] tracking-widest text-white/30 uppercase font-mono">Streak Matrix / 7日行度</span>
                         <span id="streak-count" class="text-[10px] font-mono text-white/50 bg-white/5 px-2 py-0.5 rounded-full">连签 0 天</span>
@@ -499,8 +506,20 @@
             document.getElementById('center-daylight').innerText = term.daylight.toFixed(2);
         }
 
+        // ======================== 动态色域管道 ========================
         function updateAmbientGlow(term) {
-            document.getElementById('ambient-glow').style.backgroundColor = term.color;
+            const season = getSeason(term.id);
+            const backdrop = document.getElementById('ambient-backdrop');
+            const glow = document.getElementById('ambient-glow');
+
+            const seasonBase = {
+                spring: '#060a07',
+                summer: '#0b0707',
+                autumn: '#090806',
+                winter: '#06080b'
+            };
+            backdrop.style.backgroundColor = seasonBase[season] || '#070708';
+            glow.style.background = `radial-gradient(circle, ${term.color} 0%, transparent 70%)`;
         }
 
         // ======================== 今日面板更新 ========================
@@ -628,6 +647,7 @@
                 btn.className = 'w-full bg-white/5 text-white/30 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest cursor-not-allowed border border-white/5 shadow-none';
                 btn.disabled = true;
             }
+            renderCheckinZone();
         }
 
         function executeDailyCheckin() {
@@ -669,7 +689,71 @@
 
             renderStreakMatrix();
             checkCheckinStatus();
+            renderCheckinZone();
             gsap.from('#daily-checkin-btn', { scale: 0.94, duration: 0.4, ease: 'elastic.out(1, 0.4)' });
+        }
+
+        // ======================== 赛博木鱼双态渲染 ========================
+        function renderCheckinZone() {
+            const zone = document.getElementById('checkin-muyu-zone');
+            const todayStr = getTodayStr();
+            const checkins = JSON.parse(localStorage.getItem('solar_checkins') || '[]');
+            if (!checkins.includes(todayStr)) return; // 未签到，保留原有 UI
+
+            zone.innerHTML = '';
+            const activeTerm = solarTerms[todayTermIndex];
+            const color = activeTerm.color;
+
+            zone.innerHTML = `
+                <div id="muyu-container" class="flex flex-col items-center justify-center gap-4 py-4 select-none" style="cursor:pointer;-webkit-tap-highlight-color:transparent">
+                    <svg id="muyu-svg" viewBox="0 0 120 120" width="100" height="100" fill="none"
+                         style="stroke:${color};filter:drop-shadow(0 0 8px ${color});transition:filter 0.3s">
+                        <rect x="14" y="34" width="92" height="52" rx="26" stroke-width="2.5"/>
+                        <ellipse cx="28" cy="60" rx="12" ry="16" stroke-width="2.5"/>
+                        <circle cx="28" cy="54" r="3.5" fill="${color}"/>
+                        <line x1="46" y1="60" x2="84" y2="60" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="56" y1="40" x2="56" y2="80" stroke-width="0.8" opacity="0.3"/>
+                        <line x1="66" y1="38" x2="66" y2="82" stroke-width="0.8" opacity="0.3"/>
+                        <line x1="76" y1="40" x2="76" y2="80" stroke-width="0.8" opacity="0.3"/>
+                        <line x1="86" y1="42" x2="86" y2="78" stroke-width="0.8" opacity="0.3"/>
+                    </svg>
+                    <span class="text-[10px] font-mono tracking-widest text-white/25 uppercase">点击积累功德 / TAP FOR MERIT</span>
+                </div>
+            `;
+
+            const svg = document.getElementById('muyu-svg');
+            const container = document.getElementById('muyu-container');
+
+            container.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                handleMuyuTap(e, svg, color, container);
+            });
+            container.addEventListener('click', (e) => {
+                handleMuyuTap(e, svg, color, container);
+            });
+        }
+
+        function handleMuyuTap(e, svg, color, container) {
+            svg.classList.remove('animate-muyu');
+            void svg.offsetWidth;
+            svg.classList.add('animate-muyu');
+
+            const rect = container.getBoundingClientRect();
+            const x = e.clientX || rect.left + rect.width / 2;
+            const y = e.clientY || rect.top;
+
+            const span = document.createElement('span');
+            span.className = 'animate-float';
+            span.innerText = '功德 +1';
+            span.style.cssText = `
+                position:fixed;z-index:999;pointer-events:none;
+                left:${x - 28}px;top:${y - 10}px;
+                font-family:'Space Grotesk',monospace;font-size:12px;font-weight:700;
+                color:${color};text-shadow:0 0 8px ${color};
+                letter-spacing:0.1em;white-space:nowrap;
+            `;
+            document.body.appendChild(span);
+            setTimeout(() => span.remove(), 800);
         }
 
         // ======================== 倒计时 ========================
