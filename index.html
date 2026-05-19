@@ -29,15 +29,15 @@
         .streak-lit { animation: breathe 2.4s ease-in-out infinite; }
         .checkin-burst { position: fixed; pointer-events: none; z-index: 999; width: 6px; height: 6px; border-radius: 50%; animation: burst-particle 0.8s ease-out forwards; }
         .popcard-enter { animation: popcard-in 0.25s ease-out forwards; }
-        @keyframes muyu-vibrate { 0% { transform: scale(1) rotate(0deg); } 15% { transform: scale(0.88) translate(-4px, 3px) rotate(-3deg); } 30% { transform: scale(0.88) translate(4px, -3px) rotate(3deg); } 50% { transform: scale(0.92) translate(-2px, -2px) rotate(-2deg); } 70% { transform: scale(0.92) translate(2px, 2px) rotate(2deg); } 100% { transform: scale(1) rotate(0deg); } }
+        @keyframes muyu-vibrate { 0% { transform: scale(1) rotate(0deg); } 26% { transform: scale(0.92) translate(-2px, 1px) rotate(-2deg); } 46% { transform: scale(1.07) translate(3px, -3px) rotate(2.5deg); } 66% { transform: scale(0.95) translate(-1px, 2px) rotate(-1.5deg); } 85% { transform: scale(1.03) translate(1px, -1px) rotate(1deg); } 100% { transform: scale(1) rotate(0deg); } }
         @keyframes float-up { 0% { transform: translateY(0) scale(0.8); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-70px) scale(1.1); opacity: 0; } }
         @keyframes merit-breathe { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
-        .animate-vibrate { animation: muyu-vibrate 0.1s ease-in-out; }
+        .animate-vibrate { animation: muyu-vibrate 0.36s ease-out; }
         .animate-float { animation: float-up 0.8s ease-out forwards; }
-        @keyframes stick-hit { 0% { transform: translate(0, 0) rotate(0deg); } 20% { transform: translate(-15px, 40px) rotate(-25deg); } 100% { transform: translate(0, 0) rotate(0deg); } }
+
         @keyframes confetti-explode-v2 { 0% { transform: translate(0, 0) scale(1); opacity: 1; } 100% { transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) scale(0); opacity: 0; } }
         @keyframes wave-expand { 0% { transform: scale(0.1); opacity: 0.9; border-color: #FBBF24; border-width: 3px; } 100% { transform: scale(2.2); opacity: 0; border-color: rgba(251,191,36,0); border-width: 0px; } }
-        .animate-stick { animation: stick-hit 0.12s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
         .animate-confetti-v2 { animation: confetti-explode-v2 0.8s ease-out forwards; }
         .animate-wave { animation: wave-expand 0.45s ease-out forwards; }
     </style>
@@ -62,6 +62,7 @@
             <div id="center-hub" class="absolute w-[290px] h-[290px] rounded-full bg-white/5 border border-white/10 backdrop-blur-2xl flex flex-col items-center justify-center text-center p-6 pointer-events-none shadow-2xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
                 <span class="text-[10px] tracking-[0.4em] text-white/40 uppercase font-mono">Solar Axis</span>
                 <h1 id="center-name" class="text-6xl font-bold my-3 tracking-widest transition-all duration-300">---</h1>
+                <div id="weather-badge" class="text-[11px] font-mono text-white/50 tracking-wide mb-2 transition-all duration-500">🌐 --</div>
                 <div class="w-12 h-[1px] bg-white/20 my-1"></div>
                 <div class="text-xs font-mono text-white/50 tracking-wide">黄经面: <span id="center-angle" class="text-white font-bold">0</span>°</div>
                 <div class="text-xs font-mono text-white/50 tracking-wide mt-1">日照率: <span id="center-daylight" class="text-white font-bold">0</span></div>
@@ -424,12 +425,48 @@
                 const rawWeather = cond.weatherDesc[0].value;
                 const temp = cond.temp_C;
                 const weather = weatherMap[rawWeather] || rawWeather.split(' ').slice(0, 2).join(' ');
-                weatherData = { city, weather, temp };
+                weatherData = { city, weather, temp, raw: rawWeather };
                 txtEl.innerText = `${city} · ${weather} · ${temp}℃`;
+                updateWeatherVisual();
             } catch (e) {
                 console.warn('天气接口不可达:', e.message);
                 txtEl.innerText = 'Chrono Syncing · 岁时流转';
+                weatherData = { city: '--', weather: '--', temp: '--', raw: 'Clear' };
+                updateWeatherVisual();
             }
+        }
+
+        function getWeatherVisualType(raw) {
+            const r = (raw || '').toLowerCase();
+            if (r.includes('snow') || r.includes('blizzard') || r.includes('ice')) return 'snow';
+            if (r.includes('thunder') || r.includes('lightning')) return 'thunder';
+            if (r.includes('rain') || r.includes('drizzle') || r.includes('shower')) return 'rain';
+            if (r.includes('fog') || r.includes('mist') || r.includes('haze')) return 'fog';
+            if (r.includes('overcast')) return 'overcast';
+            if (r.includes('cloud') || r.includes('partly')) return 'cloudy';
+            return 'clear';
+        }
+
+        function updateWeatherVisual() {
+            if (!weatherData) return;
+            const type = getWeatherVisualType(weatherData.raw);
+            const hub = document.getElementById('center-hub');
+            if (hub) hub.dataset.weather = type;
+            updateWeatherBadge(weatherData.weather, weatherData.temp);
+            // 天气数据到达后立即刷新粒子
+            if (particles && particles.length > 0) {
+                for (let i = 0; i < particles.length; i++) {
+                    particles[i] = createWeatherParticle(true);
+                }
+            }
+        }
+
+        function updateWeatherBadge(weather, temp) {
+            const badge = document.getElementById('weather-badge');
+            if (!badge) return;
+            const type = weatherData ? getWeatherVisualType(weatherData.raw) : 'clear';
+            const icons = { clear: '☀️', cloudy: '⛅', overcast: '☁️', rain: '🌧️', snow: '❄️', fog: '🌫️', thunder: '⛈️' };
+            badge.innerHTML = `${icons[type] || '🌐'} ${weather} · ${temp}℃`;
         }
 
         // ======================== 星盘渲染 ========================
@@ -721,12 +758,6 @@
                         <span id="merit-total-counter" class="text-3xl font-bold tracking-normal" style="color:${color};text-shadow:0 0 14px ${color};animation:merit-breathe 2s ease-in-out infinite">${meritCount}</span>
                     </div>
                     <div class="relative z-10">
-                        <svg id="muyu-stick" viewBox="0 0 60 100" width="32" height="54" fill="none"
-                             style="position:absolute;top:-24px;right:-18px;filter:drop-shadow(0 0 6px ${color});-webkit-filter:drop-shadow(0 0 6px ${color});z-index:5;pointer-events:none">
-                            <rect x="22" y="40" width="6" height="55" rx="3" fill="rgba(255,255,255,0.12)" stroke="${color}" stroke-width="1.5"/>
-                            <ellipse cx="25" cy="28" rx="14" ry="16" fill="rgba(0,0,0,0.5)" stroke="${color}" stroke-width="2"/>
-                            <ellipse cx="25" cy="22" rx="8" ry="5" fill="rgba(255,255,255,0.08)" stroke="${color}" stroke-width="0.8" opacity="0.6"/>
-                        </svg>
                         <svg id="muyu-svg" viewBox="0 0 140 120" width="110" height="94"
                              style="filter:drop-shadow(0 0 10px ${color});-webkit-filter:drop-shadow(0 0 10px ${color})">
                             <rect x="14" y="28" width="110" height="62" rx="31" fill="rgba(0,0,0,0.5)" stroke="${color}" stroke-width="2.5"/>
@@ -755,19 +786,10 @@
         }
 
         function handleMuyuTap(e, svg, color, container) {
-            const stick = document.getElementById('muyu-stick');
-            if (stick) {
-                stick.classList.remove('animate-stick');
-            }
-            svg.classList.remove('animate-vibrate');
-            if (stick) {
-                void stick.offsetWidth;
-            }
-            void svg.offsetWidth;
-            if (stick) {
-                stick.classList.add('animate-stick');
-            }
-            svg.classList.add('animate-vibrate');
+            // 木鱼震动动画
+            svg.style.animation = 'none';
+            svg.offsetWidth;
+            svg.style.animation = 'muyu-vibrate 0.36s ease-out';
 
             const critRoll = Math.random();
             const isCrit = critRoll < 0.1;
@@ -870,81 +892,218 @@
             document.getElementById('countdown-timer').innerText = `${days}D ${hours}H ${mins}M ${secs}S TO NEXT TERM`;
         }
 
-        // ======================== Canvas 粒子引擎 ========================
+        // ======================== Canvas 粒子引擎 (天气驱动) ========================
         function initCanvas() {
             canvas = document.getElementById('ambient-canvas');
             ctx = canvas.getContext('2d');
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
             particles = [];
-            for (let i = 0; i < 60; i++) { particles.push(createParticle(true)); }
+            for (let i = 0; i < 80; i++) { particles.push(createWeatherParticle(true)); }
             animateParticles();
         }
 
-        function createParticle(randomY) {
-            return {
-                x: Math.random() * canvas.width,
-                y: randomY ? Math.random() * canvas.height : canvas.height + 10,
-                size: Math.random() * 2.5 + 1,
-                vx: Math.random() * 0.4 - 0.2,
-                vy: 0,
+        function createWeatherParticle(randomY) {
+            const type = weatherData ? getWeatherVisualType(weatherData.raw) : 'clear';
+            const p = {
+                x: Math.random() * (canvas.width || window.innerWidth),
+                y: randomY ? Math.random() * (canvas.height || window.innerHeight) : -20,
+                vx: 0, vy: 0,
+                size: 1,
                 alpha: Math.random() * 0.4 + 0.1,
-                rotation: Math.random() * Math.PI,
-                rotSpeed: Math.random() * 0.02 - 0.01
+                wobble: Math.random() * Math.PI * 2,
+                wobbleSpeed: 0,
+                shape: 'circle',
+                life: 1,
+                decay: 0,
             };
+
+            switch (type) {
+                case 'clear':
+                    p.size = Math.random() * 2.2 + 1;
+                    p.vy = -(Math.random() * 0.5 + 0.15);
+                    p.vx = (Math.random() - 0.5) * 0.3;
+                    p.alpha = Math.random() * 0.55 + 0.2;
+                    p.shape = Math.random() > 0.85 ? 'glow' : 'circle';
+                    if (p.shape === 'glow') p.size = Math.random() * 5 + 3;
+                    break;
+                case 'cloudy':
+                    p.size = Math.random() * 7 + 3;
+                    p.vx = (Math.random() - 0.5) * 0.25;
+                    p.vy = (Math.random() - 0.5) * 0.1;
+                    p.alpha = Math.random() * 0.18 + 0.05;
+                    p.shape = 'blob';
+                    break;
+                case 'overcast':
+                    p.size = Math.random() * 9 + 5;
+                    p.vx = (Math.random() - 0.5) * 0.2;
+                    p.vy = (Math.random() - 0.5) * 0.07;
+                    p.alpha = Math.random() * 0.14 + 0.04;
+                    p.shape = 'blob';
+                    break;
+                case 'rain':
+                    p.size = Math.random() * 2 + 1;
+                    p.vy = Math.random() * 4 + 3;
+                    p.vx = -0.5 - Math.random() * 0.8;
+                    p.alpha = Math.random() * 0.45 + 0.2;
+                    p.shape = 'streak';
+                    p.decay = 0.002 + Math.random() * 0.004;
+                    p.y = randomY ? Math.random() * canvas.height : -(Math.random() * 200);
+                    break;
+                case 'snow':
+                    p.size = Math.random() * 3.5 + 2;
+                    p.vy = Math.random() * 0.7 + 0.3;
+                    p.vx = (Math.random() - 0.5) * 0.9;
+                    p.wobbleSpeed = Math.random() * 0.025 + 0.01;
+                    p.alpha = Math.random() * 0.6 + 0.2;
+                    p.shape = 'flake';
+                    break;
+                case 'fog':
+                    p.size = Math.random() * 16 + 8;
+                    p.vx = (Math.random() - 0.5) * 0.12;
+                    p.vy = (Math.random() - 0.5) * 0.05;
+                    p.alpha = Math.random() * 0.07 + 0.02;
+                    p.shape = 'blob';
+                    break;
+                case 'thunder':
+                    p.size = Math.random() * 2 + 1.2;
+                    p.vx = (Math.random() - 0.5) * 0.6;
+                    p.vy = (Math.random() - 0.5) * 0.6;
+                    p.alpha = Math.random() * 0.4 + 0.1;
+                    p.shape = Math.random() > 0.88 ? 'flash' : 'circle';
+                    break;
+                default:
+                    p.size = Math.random() * 2 + 1;
+                    p.vx = (Math.random() - 0.5) * 0.3;
+                    p.vy = (Math.random() - 0.5) * 0.3;
+            }
+            return p;
         }
 
         function animateParticles() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const termId = solarTerms[currentIndex].id;
-            const season = getSeason(termId);
+            const type = weatherData ? getWeatherVisualType(weatherData.raw) : 'clear';
+
+            // 雷电：间歇性全屏闪光
+            if (type === 'thunder' && Math.random() < 0.004) {
+                ctx.fillStyle = `rgba(255,255,255,${0.06 + Math.random() * 0.08})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
 
             particles.forEach((p, idx) => {
-                if (season === 'spring') {
-                    p.vy = -Math.random() * 0.3 - 0.1;
-                    ctx.fillStyle = `rgba(143, 214, 148, ${p.alpha})`;
-                } else if (season === 'summer') {
-                    p.vy = Math.random() * 0.6 - 0.3;
-                    p.vx += Math.random() * 0.1 - 0.05;
-                    ctx.fillStyle = `rgba(255, 213, 79, ${p.alpha})`;
-                } else if (season === 'autumn') {
-                    p.vy = Math.random() * 0.25 + 0.1;
-                    p.rotation += p.rotSpeed;
-                    ctx.fillStyle = `rgba(232, 155, 92, ${p.alpha})`;
-                } else {
-                    p.vy = Math.random() * 1.0 + 0.5;
-                    ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
-                }
-
+                // 鼠标斥力
                 const dx = mouseX - p.x;
                 const dy = mouseY - p.y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                if (dist < 160) {
-                    const force = (160 - dist) / 160;
-                    p.x -= (dx / dist) * force * 2.5;
-                    p.y -= (dy / dist) * force * 2.5;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 140) {
+                    const force = (140 - dist) / 140;
+                    p.x -= (dx / dist) * force * 2;
+                    p.y -= (dy / dist) * force * 2;
                 }
 
-                p.x += p.vx; p.y += p.vy;
-
-                if (p.y < -10 || p.y > canvas.height + 10 || p.x < -10 || p.x > canvas.width + 10) {
-                    particles[idx] = createParticle(false);
-                    if (season === 'spring') particles[idx].y = canvas.height + 5;
-                    if (season === 'winter') particles[idx].y = -5;
+                // 雪花左右飘摇
+                if (p.shape === 'flake') {
+                    p.wobble += p.wobbleSpeed;
+                    p.x += Math.sin(p.wobble) * 0.35;
                 }
+
+                p.x += p.vx;
+                p.y += p.vy;
+
+                // 雨的渐隐生命周期
+                if (p.decay > 0) {
+                    p.life -= p.decay;
+                    if (p.life <= 0) {
+                        particles[idx] = createWeatherParticle(false);
+                        particles[idx].y = -(Math.random() * 150);
+                        particles[idx].x = Math.random() * (canvas.width + 300) - 150;
+                        return;
+                    }
+                }
+
+                // 边界循环
+                if (p.y < -40) { p.y = canvas.height + 30; p.x = Math.random() * canvas.width; }
+                if (p.y > canvas.height + 40) { p.y = -30; p.x = Math.random() * canvas.width; }
+                if (p.x < -40) p.x = canvas.width + 30;
+                if (p.x > canvas.width + 40) p.x = -30;
 
                 ctx.beginPath();
-                if (season === 'autumn') {
-                    ctx.save();
-                    ctx.translate(p.x, p.y);
-                    ctx.rotate(p.rotation);
-                    ctx.fillRect(-p.size, -p.size, p.size * 2, p.size);
-                    ctx.restore();
-                } else {
-                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                    ctx.fill();
+
+                switch (p.shape) {
+                    case 'streak': {
+                        // 雨丝：细长斜线
+                        const len = p.size * 6;
+                        ctx.strokeStyle = `rgba(140,190,235,${p.alpha * p.life})`;
+                        ctx.lineWidth = p.size * 0.28;
+                        ctx.lineCap = 'round';
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p.x - p.vx * 3, p.y - len);
+                        ctx.stroke();
+                        break;
+                    }
+                    case 'blob': {
+                        // 云/雾：大块柔光团
+                        const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+                        const a = p.alpha * 1.6;
+                        if (type === 'fog') {
+                            grd.addColorStop(0, `rgba(185,185,185,${a})`);
+                            grd.addColorStop(1, 'rgba(185,185,185,0)');
+                        } else if (type === 'overcast') {
+                            grd.addColorStop(0, `rgba(145,145,150,${a})`);
+                            grd.addColorStop(1, 'rgba(145,145,150,0)');
+                        } else {
+                            grd.addColorStop(0, `rgba(225,220,215,${a})`);
+                            grd.addColorStop(1, 'rgba(225,220,215,0)');
+                        }
+                        ctx.fillStyle = grd;
+                        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                        ctx.fill();
+                        break;
+                    }
+                    case 'glow': {
+                        // 晴天光晕
+                        const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+                        glow.addColorStop(0, `rgba(255,225,160,${p.alpha})`);
+                        glow.addColorStop(0.5, `rgba(255,185,80,${p.alpha * 0.5})`);
+                        glow.addColorStop(1, 'rgba(255,150,50,0)');
+                        ctx.fillStyle = glow;
+                        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                        ctx.fill();
+                        break;
+                    }
+                    case 'flake': {
+                        // 雪花：柔白圆点带光晕
+                        const fg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+                        fg.addColorStop(0, `rgba(255,255,255,${p.alpha})`);
+                        fg.addColorStop(0.6, `rgba(255,255,255,${p.alpha * 0.4})`);
+                        fg.addColorStop(1, 'rgba(255,255,255,0)');
+                        ctx.fillStyle = fg;
+                        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                        ctx.fill();
+                        break;
+                    }
+                    case 'flash': {
+                        // 雷电粒子：亮白闪烁
+                        ctx.fillStyle = `rgba(255,250,225,${p.alpha * 1.8})`;
+                        ctx.shadowColor = 'rgba(255,250,200,0.6)';
+                        ctx.shadowBlur = p.size * 3;
+                        ctx.arc(p.x, p.y, p.size * 0.8, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+                        break;
+                    }
+                    default: {
+                        const clr = type === 'clear' ? `rgba(255,220,140,${p.alpha})` : `rgba(220,220,230,${p.alpha})`;
+                        ctx.fillStyle = clr;
+                        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
                 }
             });
+
+            if (particles.length < 80) particles.push(createWeatherParticle(true));
+            if (particles.length > 90) particles.length = 80;
+
             requestAnimationFrame(animateParticles);
         }
     </script>
